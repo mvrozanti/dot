@@ -1,0 +1,10 @@
+{
+  "install_cmd": "sudo pacman --needed --noconfirm -S",
+  "install": [ "arandr" ],
+  "copy": { ".a.file": "~/.a.file" },
+  "excluded": [
+    "hotmail.gpg",
+    "__pycache__"
+  ],
+  "commands": [ "mkdir -p ~/util" ]
+}

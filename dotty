@@ -1,0 +1,120 @@
+#!/bin/sh
+
+usage="$(basename "$0") [-h] [--config *dotty*.json] [-f] [-b] [-c] [-C] [-r] [-d] [-s [commit message [commit message ...]]] [-i]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --config *dotty*.json
+                        the JSON file you want to use, it's only required if filename doesn't end in json or doesn't contain dotty in the basename
+  -f, --force           do not prompt user: replace files/folders if they already exist, removing previous directory tree
+  -b, --backup          run copy in reverse so that files and directories are backed up to the directory the config file is in
+  -c, --clear-b         clears the config directory before any operations, removing all files listed in it
+  -C, --clear-a         clears the config directory after every operation, removing all files listed in it
+  -r, --restore         restore all elements to system (mkdirs, link, copy, install(install_cmd), commands)
+  -d, --dry-run         perform a dry run, outputting what changes would have been made if this argument was removed [TODO]
+  -s [commit message [commit message ...]], --sync [commit message [commit message ...]]
+                        perform action --backup, commits changes and pushes to the dotfiles remote repository (must already be set up) and then --clear-a"
+# -e LOCATION, --eject LOCATION
+#                        run --clear and move contents of dotfiles folder to another folder (thank hoberto)
+# -i, --inspect         show differences between the last commit and the one before that [TODO]
+
+# defaults
+config=.dottyrc.json
+force=""
+backup=""
+clear_b=""
+clear_a=""
+restore=""
+dry_run=""
+sync=""
+
+while getopts 'hfbcCrds:-:' option; do
+  case "$option" in
+    -) case "${OPTARG}" in
+         config)
+           config="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+           ;;
+         sync)
+           sync="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+           ;;
+       esac
+       ;;
+    h) echo "$usage"
+       exit
+       ;;
+    f) force=1
+       ;;
+    b) backup=1
+       ;;
+    c) clear_b=1
+       ;;
+    C) clear_a=1
+       ;;
+    r) restore=1
+       ;;
+    d) dry_run=1
+       ;;
+    s) sync=$OPTARG
+       ;;
+    :) printf "missing argument for -%s\n" "$OPTARG" >&2
+       echo "$usage" >&2
+       exit 1
+       ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+# echo force=$force
+# echo config=$config
+# echo backup=$backup
+# echo clear_b=$clear_b
+# echo clear_a=$clear_a
+# echo restore=$restore
+# echo dry_run=$dry_run
+# echo sync=$sync
+
+command -v jq || sudo pacman -Sy --needed --noconfirm $_ 2>&1 >/dev/null
+jq < $config >/dev/null
+if [[ $? -ne 0 ]]; then
+    echo invalid config
+    exit 1
+fi
+ 
+function backup(){ 
+  do_copy 
+}
+
+function restore(){ 
+  do_copy reverse 
+}
+
+BASE=$(DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ))
+function do_copy(){
+  test "$1" == 'reverse'
+  reverse=$?
+  from_tos="`jq -r < $config '.copy | keys[] as $k | "\($k) \(.[$k])"'`"
+  while IFS= read -r line; do
+    from=`awk '{print $1}' <<< $line`
+    to=`awk '{print $2}' <<< $line`
+    # echo to=$to
+    # echo from=$from
+    # echo reverse=$reverse
+    eval to=$to
+    eval from=$from
+    # echo pwd=`pwd`
+    if [[ $reverse -eq 0 ]]; then
+      mv "$from" "$to"
+    else
+      # echo moving $to to $from
+      mv "$to" "$from"
+    fi
+  done <<< "$from_tos"
+}
+
+[[ ! -z $restore ]] && restore
+
+[[ ! -z $backup ]] && backup 
+
+# stat /root/.a.file
+
+# stat .a.file || (echo test failed && exit 1)
